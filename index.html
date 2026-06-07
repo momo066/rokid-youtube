@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Rokid YouTube</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000000;
+            color: #00ff41;
+            font-family: 'Outfit', 'Segoe UI', -apple-system, sans-serif;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+            padding: 8px 12px;
+        }
+
+        /* Top status bar */
+        #status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #00aa33;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #003300;
+        }
+        #clock {
+            font-weight: bold;
+        }
+
+        /* Main content container */
+        #content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow: hidden;
+            padding: 8px 0;
+        }
+
+        /* List View */
+        .video-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 100%;
+        }
+        .video-item {
+            display: flex;
+            gap: 8px;
+            padding: 6px;
+            border: 1px solid #003300;
+            border-radius: 4px;
+            background-color: rgba(0, 20, 5, 0.2);
+            transition: all 0.2s ease;
+            align-items: center;
+        }
+        .video-item.focused {
+            border-color: #00ff41;
+            background-color: #00ff41;
+            color: #000000;
+            font-weight: bold;
+            transform: scale(1.02);
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.4);
+        }
+        .video-thumb {
+            width: 80px;
+            height: 45px;
+            object-fit: cover;
+            border: 1px solid #003300;
+            border-radius: 2px;
+        }
+        .video-item.focused .video-thumb {
+            border-color: #004400;
+        }
+        .video-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .video-title {
+            font-size: 13px;
+            line-height: 1.25;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        .video-channel {
+            margin-top: 2px;
+            font-size: 10px;
+            color: #00aa33;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .video-item.focused .video-channel {
+            color: #004400;
+        }
+
+        /* Player View */
+        #player-view {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            text-align: left;
+        }
+        #player-container {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border: 1px solid #00ff41;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        .play-title {
+            font-size: 14px;
+            font-weight: bold;
+            line-height: 1.35;
+            margin-bottom: 4px;
+            color: #00ff41;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        .play-channel {
+            font-size: 11px;
+            color: #00aa33;
+        }
+        .play-controls-hint {
+            margin-top: 8px;
+            font-size: 10px;
+            color: #005500;
+            border-top: 1px dashed #003300;
+            padding-top: 4px;
+        }
+
+        /* Setup / Instructions View */
+        #setup-view {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            height: 100%;
+        }
+        .setup-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #ffaa00;
+        }
+        .setup-desc {
+            font-size: 12px;
+            line-height: 1.4;
+            color: #88ffaa;
+            margin-bottom: 8px;
+        }
+        .code-box {
+            font-family: monospace;
+            font-size: 10px;
+            background: #051505;
+            border: 1px solid #005500;
+            padding: 6px;
+            border-radius: 4px;
+            width: 100%;
+            text-align: left;
+            word-break: break-all;
+            margin-bottom: 6px;
+            color: #00ff41;
+        }
+
+        /* Footer */
+        #footer {
+            font-size: 11px;
+            color: #005500;
+            text-align: center;
+            padding-top: 6px;
+            border-top: 1px solid #003300;
+        }
+    </style>
+</head>
+<body>
+    <div id="status-bar">
+        <span id="video-source">Loading...</span>
+        <span id="clock">10:00 AM</span>
+    </div>
+    
+    <div id="content">
+        <!-- List View -->
+        <div id="list-view" class="video-list">
+            <!-- Video items injected here -->
+        </div>
+        
+        <!-- Player View -->
+        <div id="player-view">
+            <div id="player-container">
+                <!-- iframe dynamically loaded here -->
+            </div>
+            <div class="play-title" id="p-title">Video Title</div>
+            <div class="play-channel" id="p-channel">Channel Name</div>
+            <div class="play-controls-hint">
+                ● Play/Pause | ← Go Back | ↑ Seek Forward (10s)
+            </div>
+        </div>
+
+        <!-- Setup View -->
+        <div id="setup-view">
+            <div class="setup-title">YouTube API Key Required</div>
+            <div class="setup-desc">Please push your config file using ADB:</div>
+            <div class="code-box">adb shell mkdir -p /sdcard/Android/data/com.rokid.youtube/files/</div>
+            <div class="code-box">adb push config.json /sdcard/Android/data/com.rokid.youtube/files/config.json</div>
+            <div class="setup-desc">Or press <span style="color:#00ff41">ENTER</span> to try default developer key.</div>
+        </div>
+    </div>
+    
+    <div id="footer">
+        ↓ Scroll | ● Open Video | ↑ Refresh
+    </div>
+
+    <script>
+        // Default Google API Key (Leave empty or set your key here)
+        var DEFAULT_API_KEY = "YOUR_API_KEY_HERE";
+        
+        var config = {
+            api_key: DEFAULT_API_KEY,
+            query: "popular" // Can be "popular" or search keyword
+        };
+        
+        var videos = [];
+        var activeIndex = 0;
+        var mode = "list"; // "list", "player", "setup"
+        var isPlaying = true;
+        var currentTime = 0;
+        
+        // Setup clock
+        function updateClock() {
+            var now = new Date();
+            var hours = now.getHours();
+            var minutes = now.getMinutes();
+            var ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+            minutes = minutes < 10 ? '0' + minutes : minutes;
+            document.getElementById('clock').textContent = hours + ':' + minutes + ' ' + ampm;
+        }
+        setInterval(updateClock, 10000);
+        updateClock();
+
+        // Load configuration from NativeBridge
+        function loadAppConfig() {
+            try {
+                var jsonStr = NativeBridge.loadConfig();
+                if (jsonStr) {
+                    var parsed = JSON.parse(jsonStr);
+                    if (parsed.api_key) config.api_key = parsed.api_key;
+                    if (parsed.query) config.query = parsed.query;
+                    return true;
+                }
+            } catch(e) {
+                console.log("Error loading config: " + e);
+            }
+            return false;
+        }
+
+        // Fetch videos list
+        function fetchVideos() {
+            document.getElementById('list-view').innerHTML = '<div style="text-align:center;color:#00ff41;margin-top:20px;">Fetching YouTube feeds...</div>';
+            document.getElementById('video-source').textContent = "Updating...";
+            
+            setTimeout(function() {
+                if (!config.api_key) {
+                    showSetupScreen();
+                    return;
+                }
+                
+                var url = "";
+                if (config.query === "popular") {
+                    url = "https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&regionCode=US&maxResults=8&key=" + config.api_key;
+                } else {
+                    url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q=" + encodeURIComponent(config.query) + "&key=" + config.api_key;
+                }
+                
+                try {
+                    var jsonText = NativeBridge.fetchUrl(url);
+                    if (jsonText.indexOf("Error:") === 0) {
+                        if (config.api_key === DEFAULT_API_KEY) {
+                            showSetupScreen();
+                        } else {
+                            showError("API Request Failed: " + jsonText);
+                        }
+                        return;
+                    }
+                    
+                    var result = JSON.parse(jsonText);
+                    var rawItems = result.items || [];
+                    
+                    if (rawItems.length > 0) {
+                        videos = rawItems.map(function(item) {
+                            var id = item.id;
+                            if (typeof id === 'object') {
+                                id = id.videoId; // From search endpoint
+                            }
+                            
+                            return {
+                                id: id,
+                                title: item.snippet.title,
+                                channel: item.snippet.channelTitle,
+                                thumbnail: item.snippet.thumbnails.default.url
+                            };
+                        }).filter(function(v) { return v.id; }); // Filter out items with missing id
+                        
+                        document.getElementById('video-source').textContent = config.query === "popular" ? "YouTube Popular" : "Search: " + config.query;
+                        renderList();
+                    } else {
+                        showError("No videos found. Check API key status.");
+                    }
+                } catch(e) {
+                    showError("API Error: " + e.message);
+                }
+            }, 100);
+        }
+
+        function renderList() {
+            mode = "list";
+            document.getElementById('list-view').style.display = "flex";
+            document.getElementById('player-view').style.display = "none";
+            document.getElementById('setup-view').style.display = "none";
+            
+            stopVideo();
+            
+            var h = "";
+            if (videos.length === 0) {
+                h = '<div style="text-align:center;color:#ff4444;margin-top:20px;">No videos available.</div>';
+                document.getElementById('list-view').innerHTML = h;
+                return;
+            }
+            
+            var start = Math.max(0, activeIndex - 2);
+            var end = Math.min(videos.length, start + 4);
+            if (end - start < 4) {
+                start = Math.max(0, end - 4);
+            }
+            
+            for (var i = start; i < end; i++) {
+                var vid = videos[i];
+                var focusClass = i === activeIndex ? "focused" : "";
+                var icon = i === activeIndex ? "▶ " : "";
+                
+                h += '<div class="video-item ' + focusClass + '">' +
+                        '<img class="video-thumb" src="' + vid.thumbnail + '" />' +
+                        '<div class="video-info">' +
+                            '<div class="video-title">' + icon + vid.title + '</div>' +
+                            '<div class="video-channel">' + vid.channel + '</div>' +
+                        '</div>' +
+                     '</div>';
+            }
+            
+            document.getElementById('list-view').innerHTML = h;
+            document.getElementById('footer').innerHTML = "↓ Scroll | ● Select Video | ↑ Refresh";
+        }
+
+        function playSelectedVideo() {
+            mode = "player";
+            var vid = videos[activeIndex];
+            document.getElementById('list-view').style.display = "none";
+            document.getElementById('player-view').style.display = "flex";
+            
+            document.getElementById('p-title').innerHTML = vid.title;
+            document.getElementById('p-channel').textContent = vid.channel;
+            
+            // Build youtube-nocookie.com embed with enablejsapi=1 and correct origin
+            var origin = window.location.origin;
+            if (!origin || origin === "null") {
+                origin = "http://localhost"; // Fallback to localhost
+            }
+            
+            var embedUrl = "https://www.youtube-nocookie.com/embed/" + vid.id + 
+                           "?enablejsapi=1&autoplay=1&controls=1&vq=small&origin=" + encodeURIComponent(origin);
+            
+            document.getElementById('player-container').innerHTML = 
+                '<iframe id="yt-iframe" src="' + embedUrl + '" frameborder="0" ' +
+                'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" ' +
+                'allowfullscreen style="width:100%;height:100%;"></iframe>';
+            
+            isPlaying = true;
+            currentTime = 0;
+            document.getElementById('footer').innerHTML = "← Go Back | ● Play/Pause";
+        }
+
+        // Listen for postMessage from the YouTube iframe player (to track currentTime)
+        window.addEventListener('message', function(event) {
+            try {
+                var data = JSON.parse(event.data);
+                // The iframe player sends time updates via infoDelivery event
+                if (data.event === "infoDelivery" && data.info && typeof data.info.currentTime !== "undefined") {
+                    currentTime = data.info.currentTime;
+                }
+            } catch(e) {}
+        });
+
+        function togglePlayPause() {
+            var iframe = document.getElementById('yt-iframe');
+            if (iframe && iframe.contentWindow) {
+                if (isPlaying) {
+                    iframe.contentWindow.postMessage(JSON.stringify({
+                        "event": "command",
+                        "func": "pauseVideo",
+                        "args": ""
+                    }), "*");
+                    isPlaying = false;
+                } else {
+                    iframe.contentWindow.postMessage(JSON.stringify({
+                        "event": "command",
+                        "func": "playVideo",
+                        "args": ""
+                    }), "*");
+                    isPlaying = true;
+                }
+            }
+        }
+
+        function seekForward() {
+            var iframe = document.getElementById('yt-iframe');
+            if (iframe && iframe.contentWindow) {
+                iframe.contentWindow.postMessage(JSON.stringify({
+                    "event": "command",
+                    "func": "seekTo",
+                    "args": [currentTime + 10, true]
+                }), "*");
+            }
+        }
+
+        function stopVideo() {
+            // Clearing innerHTML completely stops the iframe player and unloads it
+            document.getElementById('player-container').innerHTML = '';
+        }
+
+        function showSetupScreen() {
+            mode = "setup";
+            document.getElementById('list-view').style.display = "none";
+            document.getElementById('player-view').style.display = "none";
+            document.getElementById('setup-view').style.display = "flex";
+            document.getElementById('footer').innerHTML = "● Load Default Key";
+        }
+
+        function showError(msg) {
+            document.getElementById('list-view').style.display = "flex";
+            document.getElementById('player-view').style.display = "none";
+            document.getElementById('setup-view').style.display = "none";
+            document.getElementById('list-view').innerHTML = '<div style="text-align:center;color:#ff4444;margin-top:20px;padding:10px;font-size:13px;">' + msg + '<br><br>Press ↑ to retry</div>';
+            document.getElementById('footer').innerHTML = "<!-- blank -->";
+        }
+
+        // Handle key events from D-pad
+        function onKey(k) {
+            if (mode === "list") {
+                if (k === "down") {
+                    if (videos.length > 0) {
+                        activeIndex = (activeIndex + 1) % videos.length;
+                        renderList();
+                    }
+                } else if (k === "up") {
+                    if (activeIndex > 0) {
+                        activeIndex--;
+                        renderList();
+                    } else {
+                        fetchVideos();
+                    }
+                } else if (k === "center") {
+                    if (videos.length > 0) {
+                        playSelectedVideo();
+                    }
+                }
+            } else if (mode === "player") {
+                if (k === "left") {
+                    renderList();
+                } else if (k === "center") {
+                    togglePlayPause();
+                } else if (k === "up") {
+                    seekForward();
+                }
+            } else if (mode === "setup") {
+                if (k === "center") {
+                    config.api_key = DEFAULT_API_KEY;
+                    fetchVideos();
+                } else if (k === "up") {
+                    initApp();
+                }
+            }
+        }
+
+        // Handle arrow keys in standard browser testing
+        document.addEventListener('keydown', function(e) {
+            var m = {
+                'ArrowLeft': 'left',
+                'ArrowRight': 'right',
+                'ArrowUp': 'up',
+                'ArrowDown': 'down',
+                'Enter': 'center'
+            };
+            if (m[e.key]) {
+                onKey(m[e.key]);
+            }
+        });
+
+        // Initialize App
+        function initApp() {
+            var hasConfig = loadAppConfig();
+            fetchVideos();
+        }
+
+        // Run on load
+        window.onload = initApp;
+    </script>
+</body>
+</html>
