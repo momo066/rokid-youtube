@@ -29,12 +29,12 @@ jobs:
         path: ~/.android/debug.keystore
         key: android-debug-keystore-${{ runner.os }}
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
 
     - name: Build with Gradle
       run: |
-        ./gradlew assembleDebug -PversionCode=${{ github.run_number }} -PversionName="1.0.${{ github.run_number }}"
+        gradle assembleDebug -PversionCode=${{ github.run_number }} -PversionName="1.0.${{ github.run_number }}"
         cd app/build/outputs/apk/debug/
         mv app-debug.apk rokid-app-1.0.${{ github.run_number }}.apk
 
