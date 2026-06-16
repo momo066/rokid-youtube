@@ -32,14 +32,37 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
 
+    - name: Update version in build.gradle
+      run: |
+        GRADLE_FILE=$(find . -name "build.gradle" | grep "app" | head -n 1)
+        [ -z "$GRADLE_FILE" ] && GRADLE_FILE=$(find . -name "build.gradle" | head -n 1)
+        if [ -n "$GRADLE_FILE" ]; then
+          sed -i -E "s/versionCode[[:space:]]+[0-9]+/versionCode ${{ github.run_number }}/" "$GRADLE_FILE"
+          sed -i -E "s/versionName[[:space:]]+\"[^\"]+\"/versionName \"1.0.${{ github.run_number }}\"/" "$GRADLE_FILE"
+        fi
+
     - name: Build with Gradle
       run: |
-        gradle assembleDebug -PversionCode=${{ github.run_number }} -PversionName="1.0.${{ github.run_number }}"
-        cd build/outputs/apk/debug/
-        mv app-debug.apk rokid-app-1.0.${{ github.run_number }}.apk
+        GRADLE_DIR=$(dirname $(find . -name "settings.gradle" | head -n 1))
+        if [ -z "$GRADLE_DIR" ] || [ "$GRADLE_DIR" = "." ]; then
+          gradle assembleDebug
+        else
+          cd "$GRADLE_DIR"
+          gradle assembleDebug
+        fi
+
+    - name: Rename and Prepare APK
+      run: |
+        APK_PATH=$(find . -name "*.apk" | grep debug | head -n 1)
+        if [ -n "$APK_PATH" ]; then
+          mv "$APK_PATH" ./rokid-app-1.0.${{ github.run_number }}.apk
+        else
+          echo "APK file not found."
+          exit 1
+        fi
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: rokid-app-apk
-        path: build/outputs/apk/debug/rokid-app-1.0.${{ github.run_number }}.apk
+        path: ./rokid-app-1.0.${{ github.run_number }}.apk
