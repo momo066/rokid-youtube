@@ -32,32 +32,36 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
 
-    - name: Update version in build.gradle
+    - name: Build and Rename APK
       run: |
-        GRADLE_FILE=$(find . -name "build.gradle" | grep "app" | head -n 1)
-        [ -z "$GRADLE_FILE" ] && GRADLE_FILE=$(find . -name "build.gradle" | head -n 1)
-        if [ -n "$GRADLE_FILE" ]; then
-          sed -i -E "s/versionCode[[:space:]]+[0-9]+/versionCode ${{ github.run_number }}/" "$GRADLE_FILE"
-          sed -i -E "s/versionName[[:space:]]+\"[^\"]+\"/versionName \"1.0.${{ github.run_number }}\"/" "$GRADLE_FILE"
-        fi
-
-    - name: Build with Gradle
-      run: |
-        GRADLE_DIR=$(dirname $(find . -name "settings.gradle" | head -n 1))
-        if [ -z "$GRADLE_DIR" ] || [ "$GRADLE_DIR" = "." ]; then
-          gradle assembleDebug
+        # Gradleの設定ファイル（settings.gradle または build.gradle）を自動で探して移動
+        TARGET_DIR="."
+        if [ -n "$(find . -name "settings.gradle" | head -n 1)" ]; then
+          TARGET_DIR=$(dirname "$(find . -name "settings.gradle" | head -n 1)")
+        elif [ -n "$(find . -name "build.gradle" | head -n 1)" ]; then
+          TARGET_DIR=$(dirname "$(find . -name "build.gradle" | head -n 1)")
         else
-          cd "$GRADLE_DIR"
-          gradle assembleDebug
+          echo "Error: Gradle files not found."
+          exit 1
+        fi
+        
+        cd "$TARGET_DIR"
+
+        # ビルドの実行
+        if [ -f "gradlew" ]; then
+          chmod +x gradlew
+          ./gradlew assembleDebug -PversionCode=${{ github.run_number }} -PversionName="1.0.${{ github.run_number }}"
+        else
+          gradle assembleDebug -PversionCode=${{ github.run_number }} -PversionName="1.0.${{ github.run_number }}"
         fi
 
-    - name: Rename and Prepare APK
-      run: |
+        # 完成したAPKを探して名前を変更
+        cd $GITHUB_WORKSPACE
         APK_PATH=$(find . -name "*.apk" | grep debug | head -n 1)
         if [ -n "$APK_PATH" ]; then
           mv "$APK_PATH" ./rokid-app-1.0.${{ github.run_number }}.apk
         else
-          echo "APK file not found."
+          echo "Error: APK file not found."
           exit 1
         fi
 
