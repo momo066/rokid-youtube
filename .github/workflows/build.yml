@@ -29,44 +29,82 @@ jobs:
         path: ~/.android/debug.keystore
         key: android-debug-keystore-${{ runner.os }}
 
+    - name: Create Android Project Structure
+      run: |
+        PKG_NAME="com.rokid.youtube"
+        if [ -f MainActivity.java ]; then
+          PKG_NAME=$(grep -oP '^package\s+\K[a-zA-Z0-9_.]+' MainActivity.java | tr -d ';' || echo "com.rokid.youtube")
+        fi
+        PKG_DIR=$(echo $PKG_NAME | tr '.' '/')
+        
+        # 正しいフォルダ構造の作成
+        mkdir -p "app/src/main/java/$PKG_DIR"
+        mkdir -p app/src/main/assets
+        mkdir -p app/src/main/res
+        
+        # ファイルの移動
+        [ -f MainActivity.java ] && mv MainActivity.java "app/src/main/java/$PKG_DIR/"
+        [ -f index.html ] && mv index.html app/src/main/assets/
+        [ -d res ] && mv res/* app/src/main/res/ 2>/dev/null || true
+        
+        # AndroidManifest.xmlの生成
+        if [ -f "AndroidManifest.xml" ]; then
+          mv AndroidManifest.xml app/src/main/
+        else
+          cat << EOF > app/src/main/AndroidManifest.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            package="$PKG_NAME">
+            <uses-permission android:name="android.permission.INTERNET" />
+            <application
+                android:allowBackup="true"
+                android:label="Rokid YouTube"
+                android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+                <activity android:name=".MainActivity" android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+        fi
+        
+        # 自動更新の仕組みを組み込んだbuild.gradleの生成
+        cat << 'EOF' > app/build.gradle
+        plugins {
+            id 'com.android.application'
+        }
+        android {
+            namespace 'REPLACE_ME'
+            compileSdk 34
+            defaultConfig {
+                applicationId "REPLACE_ME"
+                minSdk 24
+                targetSdk 34
+                versionCode System.getenv("GITHUB_RUN_NUMBER") ? System.getenv("GITHUB_RUN_NUMBER").toInteger() : 1
+                versionName "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
+            }
+            applicationVariants.all { variant ->
+                variant.outputs.all { output ->
+                    outputFileName = "RokidYouTube-${variant.versionName}.apk"
+                }
+            }
+        }
+        EOF
+        
+        sed -i "s/REPLACE_ME/$PKG_NAME/g" app/build.gradle
+        echo "include ':app'" > settings.gradle
+
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
 
-    - name: Build and Rename APK
-      run: |
-        # Gradleの設定ファイル（settings.gradle または build.gradle）を自動で探して移動
-        TARGET_DIR="."
-        if [ -n "$(find . -name "settings.gradle" | head -n 1)" ]; then
-          TARGET_DIR=$(dirname "$(find . -name "settings.gradle" | head -n 1)")
-        elif [ -n "$(find . -name "build.gradle" | head -n 1)" ]; then
-          TARGET_DIR=$(dirname "$(find . -name "build.gradle" | head -n 1)")
-        else
-          echo "Error: Gradle files not found."
-          exit 1
-        fi
-        
-        cd "$TARGET_DIR"
-
-        # ビルドの実行
-        if [ -f "gradlew" ]; then
-          chmod +x gradlew
-          ./gradlew assembleDebug -PversionCode=${{ github.run_number }} -PversionName="1.0.${{ github.run_number }}"
-        else
-          gradle assembleDebug -PversionCode=${{ github.run_number }} -PversionName="1.0.${{ github.run_number }}"
-        fi
-
-        # 完成したAPKを探して名前を変更
-        cd $GITHUB_WORKSPACE
-        APK_PATH=$(find . -name "*.apk" | grep debug | head -n 1)
-        if [ -n "$APK_PATH" ]; then
-          mv "$APK_PATH" ./rokid-app-1.0.${{ github.run_number }}.apk
-        else
-          echo "Error: APK file not found."
-          exit 1
-        fi
+    - name: Build with Gradle
+      run: gradle :app:assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: rokid-app-apk
-        path: ./rokid-app-1.0.${{ github.run_number }}.apk
+        name: rokid-youtube-apk
+        path: app/build/outputs/apk/debug/RokidYouTube-1.0.${{ github.run_number }}.apk
