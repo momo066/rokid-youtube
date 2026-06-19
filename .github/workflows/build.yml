@@ -1,0 +1,136 @@
+name: Android Build
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Cache Android Debug Keystore
+      uses: actions/cache@v4
+      with:
+        path: ~/.android/debug.keystore
+        key: android-debug-keystore-${{ runner.os }}
+
+    - name: Setup Android WebView Project
+      run: |
+        mkdir -p app/src/main/java/com/rokid/youtube
+        mkdir -p app/src/main/assets
+        mkdir -p app/src/main/res/values
+
+        # 1. 必要なファイルを適切な場所に配置
+        find . -maxdepth 1 -type f -exec cp {} app/src/main/assets/ 2>/dev/null \;
+        [ -d "css" ] && cp -r css app/src/main/assets/ || true
+        [ -d "js" ] && cp -r js app/src/main/assets/ || true
+        [ -d "images" ] && cp -r images app/src/main/assets/ || true
+
+        # 2. アプリの設計図（AndroidManifest.xml）を作成
+        cat << 'EOF' > app/src/main/AndroidManifest.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.rokid.youtube">
+            <uses-permission android:name="android.permission.INTERNET" />
+            <application android:allowBackup="true" android:label="Rokid YouTube" android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+                <activity android:name=".MainActivity" android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+
+        # 3. 画面を表示するプログラム（MainActivity.java）を作成
+        cat << 'EOF' > app/src/main/java/com/rokid/youtube/MainActivity.java
+        package com.rokid.youtube;
+        import android.app.Activity;
+        import android.os.Bundle;
+        import android.webkit.WebSettings;
+        import android.webkit.WebView;
+        import android.webkit.WebViewClient;
+        public class MainActivity extends Activity {
+            @Override
+            protected void onCreate(Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                WebView webView = new WebView(this);
+                setContentView(webView);
+                WebSettings webSettings = webView.getSettings();
+                webSettings.setJavaScriptEnabled(true);
+                webSettings.setDomStorageEnabled(true);
+                webSettings.setMediaPlaybackRequiresUserGesture(false);
+                webView.setWebViewClient(new WebViewClient());
+                webView.loadUrl("file:///android_asset/index.html");
+            }
+        }
+        EOF
+
+        # 4. バージョンの自動更新プラグインを含むビルド設定（build.gradle）を作成
+        cat << 'EOF' > app/build.gradle
+        plugins {
+            id 'com.android.application' version '8.2.2'
+        }
+        android {
+            namespace 'com.rokid.youtube'
+            compileSdk 34
+            defaultConfig {
+                applicationId "com.rokid.youtube"
+                minSdk 24
+                targetSdk 34
+                versionCode System.getenv("GITHUB_RUN_NUMBER") ? System.getenv("GITHUB_RUN_NUMBER").toInteger() : 1
+                versionName "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
+            }
+            applicationVariants.all { variant ->
+                variant.outputs.all { output ->
+                    outputFileName = "rokid-youtube-${variant.versionName}.apk"
+                }
+            }
+        }
+        EOF
+
+        # 5. 全体をまとめる設定（settings.gradle）を作成
+        cat << 'EOF' > settings.gradle
+        pluginManagement {
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
+        }
+        dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        include ':app'
+        EOF
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Build with Gradle
+      run: gradle :app:assembleDebug
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: rokid-youtube-apk
+        path: app/build/outputs/apk/debug/rokid-youtube-1.0.${{ github.run_number }}.apk
